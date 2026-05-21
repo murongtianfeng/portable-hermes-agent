@@ -930,13 +930,20 @@ class SessionDB:
 
         return self._execute_write(_do)
 
-    def get_messages(self, session_id: str) -> List[Dict[str, Any]]:
-        """Load all messages for a session, ordered by timestamp."""
+    def get_messages(self, session_id: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Load messages for a session, ordered by timestamp.
+
+        When *limit* is given, return at most that many of the earliest
+        messages. The ACP adapter uses this to derive a session title from
+        the first user message without loading the full history.
+        """
+        sql = "SELECT * FROM messages WHERE session_id = ? ORDER BY timestamp, id"
+        params: tuple = (session_id,)
+        if limit is not None:
+            sql += " LIMIT ?"
+            params = (session_id, int(limit))
         with self._lock:
-            cursor = self._conn.execute(
-                "SELECT * FROM messages WHERE session_id = ? ORDER BY timestamp, id",
-                (session_id,),
-            )
+            cursor = self._conn.execute(sql, params)
             rows = cursor.fetchall()
         result = []
         for row in rows:
