@@ -16,6 +16,54 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Windows CI exclusions (win32 only)
+# ─────────────────────────────────────────────────────────────────────────────
+# The upstream suite is POSIX-first. Some tests fail on Windows for legitimate
+# platform reasons (persistent bash shell, Unix signals, POSIX file perms,
+# audio/clipboard, macOS Homebrew, getpass/TUI, case-insensitive FS) or are
+# upstream test bugs (hardcoded "/" paths, clear=True home-wipe, source files
+# read without an explicit encoding). They are skipped on win32 ONLY so the
+# Windows CI can be green; they still run on Linux/macOS. List + rationale live
+# in tests/windows_skip.txt — remove entries there as they get fixed.
+
+# These two simulate KeyboardInterrupt and abort the whole pytest session on
+# Windows, so they must not even be collected.
+collect_ignore = (
+    ["test_interrupt_propagation.py", "test_real_interrupt_subagent.py"]
+    if sys.platform == "win32"
+    else []
+)
+
+
+def _load_windows_skip_nodeids() -> frozenset:
+    if sys.platform != "win32":
+        return frozenset()
+    path = Path(__file__).parent / "windows_skip.txt"
+    if not path.exists():
+        return frozenset()
+    return frozenset(
+        line.strip()
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    )
+
+
+_WINDOWS_SKIP_NODEIDS = _load_windows_skip_nodeids()
+
+
+def pytest_collection_modifyitems(config, items):
+    """Skip known Windows-incompatible tests on win32 (see tests/windows_skip.txt)."""
+    if not _WINDOWS_SKIP_NODEIDS:
+        return
+    skip = pytest.mark.skip(
+        reason="Windows-incompatible (POSIX-ism / upstream test bug); see tests/windows_skip.txt"
+    )
+    for item in items:
+        if item.nodeid in _WINDOWS_SKIP_NODEIDS:
+            item.add_marker(skip)
+
+
 @pytest.fixture(autouse=True)
 def _isolate_hermes_home(tmp_path, monkeypatch):
     """Redirect HERMES_HOME to a temp dir so tests never write to ~/.hermes/."""
