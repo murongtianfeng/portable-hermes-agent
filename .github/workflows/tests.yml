@@ -30,6 +30,8 @@ jobs:
           pip install -e ".[all,dev]"
 
       - name: Run test suite
-        # pyproject sets addopts = "-m 'not integration' -n auto",
-        # so integration tests are skipped and the suite runs in parallel.
-        run: pytest tests/ -p no:cacheprovider
+        # pyproject sets addopts = "-m 'not integration' -n auto", so integration
+        # tests are skipped and the suite runs in parallel. --timeout bounds every
+        # test (thread method = Windows-compatible; the conftest SIGALRM timeout is
+        # POSIX-only) so a hung test fails cleanly instead of aborting the session.
+        run: pytest tests/ -p no:cacheprovider --timeout=120 --timeout-method=thread
